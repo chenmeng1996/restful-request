@@ -6,7 +6,7 @@ import com.example.restfulrequest.http.StringHttpResult;
 
 import java.lang.reflect.Method;
 
-public class DemoHttpHandler implements HTTPHandler {
+public class SpringHttpHandler implements HTTPHandler {
 
     @Override
     public HttpResult<?> handle(Method method) {

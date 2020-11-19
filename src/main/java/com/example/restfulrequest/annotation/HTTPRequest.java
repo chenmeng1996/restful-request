@@ -10,6 +10,6 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface HTTPRequest {
-    HTTPMethod httpMethod() default HTTPMethod.GET;
+    HTTPMethod method() default HTTPMethod.GET;
     String url();
 }
