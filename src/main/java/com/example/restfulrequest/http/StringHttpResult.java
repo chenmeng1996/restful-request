@@ -1,7 +1,9 @@
 package com.example.restfulrequest.http;
 
 import lombok.AllArgsConstructor;
+import lombok.Data;
 
+@Data
 @AllArgsConstructor
 public class StringHttpResult implements HttpResult<String> {
     private String result;

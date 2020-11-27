@@ -49,12 +49,13 @@ public class HTTPRequestRegistrar implements ImportBeanDefinitionRegistrar,
      * 然后使用DefaultListableBeanFactory将代理对象注册到容器中
      */
     private void registerHttpRequest(BeanDefinitionRegistry beanDefinitionRegistry) {
+        // 类扫描器
         ClassPathScanningCandidateComponentProvider classScanner = getClassScanner();
         classScanner.setResourceLoader(this.resourceLoader);
-        //指定只关注标注了@HTTPUtil注解的接口
+        // 只找 @HTTPUtil注解 的接口
         AnnotationTypeFilter annotationTypeFilter = new AnnotationTypeFilter(HTTPUtil.class);
         classScanner.addIncludeFilter(annotationTypeFilter);
-        //指定扫描的基础包
+        // 扫描指定的package，得到定义的bean，注册bean
         String basePack = "com.example.restfulrequest";
         Set<BeanDefinition> beanDefinitionSet = classScanner.findCandidateComponents(basePack);
         for (BeanDefinition beanDefinition : beanDefinitionSet) {
@@ -69,19 +70,22 @@ public class HTTPRequestRegistrar implements ImportBeanDefinitionRegistrar,
      */
     private void registerBeans(AnnotatedBeanDefinition annotatedBeanDefinition) {
         String className = annotatedBeanDefinition.getBeanClassName();
+        // 注册bean
         ((DefaultListableBeanFactory) this.beanFactory).registerSingleton(className, createProxy(annotatedBeanDefinition));
     }
 
     /**
-     * 构造Class扫描器，设置了只扫描顶级接口，不扫描内部类
+     * 构造Class扫描器，只扫描顶级接口，不扫描内部类
      */
     private ClassPathScanningCandidateComponentProvider getClassScanner() {
         return new ClassPathScanningCandidateComponentProvider(false, this.environment) {
 
             @Override
             protected boolean isCandidateComponent(AnnotatedBeanDefinition beanDefinition) {
+                // 是否接口
                 if (beanDefinition.getMetadata().isInterface()) {
                     try {
+                        // 是否注解
                         Class<?> target = ClassUtils.forName(beanDefinition.getMetadata().getClassName(), classLoader);
                         return !target.isAnnotation();
                     } catch (Exception ex) {
@@ -94,12 +98,14 @@ public class HTTPRequestRegistrar implements ImportBeanDefinitionRegistrar,
     }
 
     /**
-     * 创建动态代理
+     * 创建JDK动态代理
      */
     private Object createProxy(AnnotatedBeanDefinition annotatedBeanDefinition) {
         try {
             AnnotationMetadata annotationMetadata = annotatedBeanDefinition.getMetadata();
+            // 被代理接口
             Class<?> target = Class.forName(annotationMetadata.getClassName());
+            // 代理方法
             InvocationHandler invocationHandler = createInvocationHandler();
             Object proxy = Proxy.newProxyInstance(HTTPRequest.class.getClassLoader(), new Class[]{target}, invocationHandler);
             return proxy;
@@ -116,6 +122,12 @@ public class HTTPRequestRegistrar implements ImportBeanDefinitionRegistrar,
         return new InvocationHandler() {
             private DemoHttpHandler demoHttpHandler = new DemoHttpHandler();
 
+            /**
+             *
+             * @param proxy 代理对象
+             * @param method 被代理方法
+             * @param args 被代理方法的参数
+             */
             @Override
             public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
 
