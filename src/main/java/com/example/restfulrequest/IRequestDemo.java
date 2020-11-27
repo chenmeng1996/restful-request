@@ -13,6 +13,6 @@ public interface IRequestDemo {
     @HTTPRequest(url = "http://www.baidu.com")
     HttpResult<String> test1();
 
-    @HTTPRequest(url = "http://test2.com", httpMethod = HTTPMethod.POST)
+    @HTTPRequest(url = "http://test2.com", method = HTTPMethod.POST)
     HttpResult<String> test2();
 }
