@@ -2,7 +2,8 @@ package com.example.restfulrequest.http;
 
 import com.example.restfulrequest.annotation.HTTPRequest;
 import com.example.restfulrequest.annotation.HTTPUtil;
-import com.example.restfulrequest.http.handler.DemoHttpHandler;
+import com.example.restfulrequest.http.handler.RestTemplateHTTPHandler;
+import com.example.restfulrequest.support.SpelParseService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanClassLoaderAware;
@@ -25,6 +26,7 @@ import org.springframework.util.ClassUtils;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -41,26 +43,30 @@ public class HTTPRequestRegistrar implements ImportBeanDefinitionRegistrar,
 
     @Override
     public void registerBeanDefinitions(AnnotationMetadata annotationMetadata, BeanDefinitionRegistry beanDefinitionRegistry) {
-        registerHttpRequest(beanDefinitionRegistry);
+        Set<String> basePackages = getBasePackages(annotationMetadata);
+        registerHttpRequest(beanDefinitionRegistry, basePackages);
     }
 
     /**
      * 利用ClassPathScanningCandidateComponentProvider获取标注了HTTPUtil注解的接口，并使用JDK动态代理为期生成代理对象。
      * 然后使用DefaultListableBeanFactory将代理对象注册到容器中
      */
-    private void registerHttpRequest(BeanDefinitionRegistry beanDefinitionRegistry) {
+    private void registerHttpRequest(BeanDefinitionRegistry beanDefinitionRegistry, Set<String> basePackages) {
         // 类扫描器
         ClassPathScanningCandidateComponentProvider classScanner = getClassScanner();
         classScanner.setResourceLoader(this.resourceLoader);
+
         // 只找 @HTTPUtil注解 的接口
         AnnotationTypeFilter annotationTypeFilter = new AnnotationTypeFilter(HTTPUtil.class);
         classScanner.addIncludeFilter(annotationTypeFilter);
+
         // 扫描指定的package，得到定义的bean，注册bean
-        String basePack = "com.example.restfulrequest";
-        Set<BeanDefinition> beanDefinitionSet = classScanner.findCandidateComponents(basePack);
-        for (BeanDefinition beanDefinition : beanDefinitionSet) {
-            if (beanDefinition instanceof AnnotatedBeanDefinition) {
-                registerBeans(((AnnotatedBeanDefinition) beanDefinition));
+        for (String basePackage : basePackages) {
+            Set<BeanDefinition> beanDefinitionSet = classScanner.findCandidateComponents(basePackage);
+            for (BeanDefinition beanDefinition : beanDefinitionSet) {
+                if (beanDefinition instanceof AnnotatedBeanDefinition) {
+                    registerBeans(((AnnotatedBeanDefinition) beanDefinition));
+                }
             }
         }
     }
@@ -105,8 +111,10 @@ public class HTTPRequestRegistrar implements ImportBeanDefinitionRegistrar,
             AnnotationMetadata annotationMetadata = annotatedBeanDefinition.getMetadata();
             // 被代理接口
             Class<?> target = Class.forName(annotationMetadata.getClassName());
+            // 被代理接口的注解
+            HTTPUtil httpUtil = target.getAnnotation(HTTPUtil.class);
             // 代理方法
-            InvocationHandler invocationHandler = createInvocationHandler();
+            InvocationHandler invocationHandler = createInvocationHandler(httpUtil);
             Object proxy = Proxy.newProxyInstance(HTTPRequest.class.getClassLoader(), new Class[]{target}, invocationHandler);
             return proxy;
         } catch (ClassNotFoundException e) {
@@ -118,9 +126,9 @@ public class HTTPRequestRegistrar implements ImportBeanDefinitionRegistrar,
     /**
      * 创建InvocationHandler，将方法调用全部代理给DemoHttpHandler
      */
-    private InvocationHandler createInvocationHandler() {
+    private InvocationHandler createInvocationHandler(HTTPUtil httpUtil) {
         return new InvocationHandler() {
-            private DemoHttpHandler demoHttpHandler = new DemoHttpHandler();
+            private RestTemplateHTTPHandler httpHandler = new RestTemplateHTTPHandler();
 
             /**
              *
@@ -130,8 +138,13 @@ public class HTTPRequestRegistrar implements ImportBeanDefinitionRegistrar,
              */
             @Override
             public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-
-                return demoHttpHandler.handle(method);
+                String service = httpUtil.service();
+                // 对@HTTPUtil注解上的service进行spel解析
+                if (!service.isEmpty() && service.contains("#")) {
+                    SpelParseService spelParseService = beanFactory.getBean(SpelParseService.class);
+                    service = spelParseService.parse(service, method, String.class, args);
+                }
+                return httpHandler.handle(method, args, service);
             }
         };
     }
@@ -154,5 +167,12 @@ public class HTTPRequestRegistrar implements ImportBeanDefinitionRegistrar,
     @Override
     public void setBeanFactory(BeanFactory beanFactory) throws BeansException {
         this.beanFactory = beanFactory;
+    }
+
+    protected Set<String> getBasePackages(AnnotationMetadata importingClassMetadata) {
+        Set<String> basePackages = new HashSet<>();
+        basePackages.add(
+                ClassUtils.getPackageName(importingClassMetadata.getClassName()));
+        return basePackages;
     }
 }
